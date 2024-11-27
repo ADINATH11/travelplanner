@@ -1,0 +1,104 @@
+version: "4"
+services:
+  database:
+    image: mysql:8.3.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./docker/database/mysql:/var/lib/mysql
+      - ./docker/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+#    healthcheck:
+#      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -u root -pmysql || exit 1" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "22181:2181"
+#    healthcheck:
+#      test: [ "CMD-SHELL", "echo stat | nc localhost 2181 | grep Mode || exit 1" ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+
+
+  broker:
+      image: confluentinc/cp-kafka:latest
+      container_name: broker
+      ports:
+        - "9090:9090"
+      depends_on:
+        - zookeeper
+      environment:
+        KAFKA_BROKER_ID: 1
+        KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9090
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+        KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+#      healthcheck:
+#        test: [ "CMD-SHELL", "echo dump | nc localhost 9090 || exit 1" ]
+#        interval: 10s
+#        timeout: 5s
+#        retries: 5
+
+  travelplanner:
+    build:
+      context: ./travelplanner
+    ports:
+      - "8081:8080"
+    depends_on:
+      - database
+      - broker
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/travelplanner_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: mysql
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9090
+
+  weatherapp:
+    build:
+      context: ./weatherapp
+    ports:
+      - "8082:8080"
+    depends_on:
+      - database
+      - broker
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/travelplanner_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: mysql
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9090
+
+#  travelplanner:
+#    build:
+#      context: ./travelplanner
+#    ports:
+#      - "8081:8080"
+#    depends_on:
+#      - database
+#      - broker
+#
+#  weatherapp:
+#    build:
+#      context: ./weatherapp
+#    ports:
+#      - "8082:8080"
+#    depends_on:
+#      - database
+#      - broker
+
